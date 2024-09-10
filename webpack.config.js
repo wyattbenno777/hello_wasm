@@ -12,11 +12,12 @@ module.exports = {
     plugins: [
         new HtmlWebpackPlugin(),
         new WasmPackPlugin({
-            crateDirectory: path.resolve(__dirname, ".")
+            crateDirectory: path.resolve(__dirname, "."),
+            forceMode: "release"  // This line specifies release mode
         }),
     ],
     mode: 'development',
     experiments: {
         asyncWebAssembly: true
-   }
+    }
 };
