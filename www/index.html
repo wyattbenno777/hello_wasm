@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>zkVM WASM Runner</title>
+</head>
+<body>
+    <h1>Upload a WAT file and Run zkVM</h1>
+    <input type="file" id="fileInput">
+    <button id="runButton">Run</button>
+    <pre id="output"></pre>
+
+    <script>
+        const worker = new Worker("worker.js");
+
+        worker.onmessage = (event) => {
+            if (event.data.type === "log") {
+                console.log("WASM Output:", event.data.message);
+            } else if (event.data.type === "result") {
+                document.getElementById("output").textContent = JSON.stringify(event.data.result, null, 2);
+            } else if (event.data.type === "error") {
+                document.getElementById("output").textContent = "Error: " + event.data.error;
+            }
+        };
+
+        document.getElementById("runButton").addEventListener("click", async () => {
+            const fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("Please select a WAT file");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = () => {
+                const wat = reader.result;
+                const func = "test_func"; // Change as needed
+                const args = ["16"];
+                const stepSize = 10;
+                const memStepSize = 1024;
+
+                worker.postMessage({ wat, func, args, stepSize, memStepSize });
+            };
+            reader.readAsText(fileInput);
+        });
+    </script>
+</body>
+</html>

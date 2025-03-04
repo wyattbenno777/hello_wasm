@@ -2,3 +2,4 @@ rustc-ice-*
 /target
 /Cargo.lock
 /node_modules
+/www/node_modules
