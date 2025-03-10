@@ -1,8 +1,8 @@
 use zk_engine::{
     nova::{
         provider::{ipa_pc, Bn256EngineIPA},
-        spartan,
-        traits::Dual,
+        spartan::{self, ppsnark::RelaxedR1CSSNARK},
+        traits::{snark::RelaxedR1CSSNARKTrait, Dual},
     },
     utils::logging::init_logger,
     wasm_ctx::{WASMArgsBuilder, WASMCtx},
@@ -12,13 +12,21 @@ use zk_engine::{
 use wasm_bindgen::prelude::*;
 use js_sys::Function;
 use wat::parse_str;
+use wasm_bindgen::prelude::*;
+use js_sys::Date;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = performance)]
+    fn now() -> f64;
+}
 
 // Ensure you use the correct cycle pairing
 pub type E = Bn256EngineIPA;
 pub type EE1 = ipa_pc::EvaluationEngine<E>;
 pub type EE2 = ipa_pc::EvaluationEngine<Dual<E>>;
 pub type S1 = spartan::batched::BatchedRelaxedR1CSSNARK<E, EE1>;
-pub type S2 = spartan::batched::BatchedRelaxedR1CSSNARK<Dual<E>, EE2>;
+pub type S2 = RelaxedR1CSSNARK<Dual<E>, EE2>;
 
 const FIB_WAT: &str = "(module
     (func $fib (export \"fib\") (param $N i64) (result i64)
@@ -61,8 +69,9 @@ pub fn run_fib(func: &str, func_args: JsValue, step_size: u32, mem_step_size: u3
     //let step_size = StepSize::new(step_size as usize);
     let step_size = StepSize::new(10);
     callback.call1(&this, &JsValue::from_str("Start pp"))?;
+    let start = now();
     let pp = WasmSNARK::<E, S1, S2>::setup(step_size);
-    callback.call1(&this, &JsValue::from_str("End pp"))?;
+    callback.call1(&this, &JsValue::from_str(&format!("End pp: {:?}", now() - start)))?;
 
     let args: Vec<String> = serde_wasm_bindgen::from_value(func_args)
         .map_err(|e| JsValue::from_str(&format!("Invalid function arguments: {}", e)))?;
@@ -80,15 +89,16 @@ pub fn run_fib(func: &str, func_args: JsValue, step_size: u32, mem_step_size: u3
     
     let wasm_ctx = WASMCtx::new(wasm_args);
     callback.call1(&this, &JsValue::from_str("Start prove"))?;
-    
+    let start = now();
     let (snark, instance) = WasmSNARK::<E, S1, S2>::prove(&pp, &wasm_ctx, step_size)
         .map_err(|e| JsValue::from_str(&format!("Proving error: {}", e)))?;
-    callback.call1(&this, &JsValue::from_str("Proving complete"))?;
+    callback.call1(&this, &JsValue::from_str(&format!("Proving complete: {:?}", now() - start)))?;
     
+    callback.call1(&this, &JsValue::from_str("Start verify"))?;
+    let start = now();
     snark.verify(&pp, &instance)
         .map_err(|e| JsValue::from_str(&format!("Verification error: {}", e)))?;
-    
-    callback.call1(&this, &JsValue::from_str("Proof verified successfully"))?;
+    callback.call1(&this, &JsValue::from_str(&format!("Verify complete: {:?}", now() - start)))?;
     
     Ok(JsValue::from_str("Proof verified successfully"))
 }
