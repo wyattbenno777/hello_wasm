@@ -4,14 +4,92 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>zkVM WASM Runner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .file-input {
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
 </head>
 <body>
-    <h1>Upload a WAT file and Run zkVM</h1>
-    <input type="file" id="fileInput">
-    <button id="runButton">Run</button>
-    <pre id="output"></pre>
+    <h1>zkVM WASM Runner</h1>
+    
+    <div class="section">
+        <h2>Run zkVM with WAT File</h2>
+        <div class="file-input">
+            <label for="watFileInput">Upload WAT file:</label>
+            <input type="file" id="watFileInput">
+        </div>
+        <div>
+            <label for="funcName">Function name:</label>
+            <input type="text" id="funcName" value="fib">
+        </div>
+        <div>
+            <label for="funcArgs">Function arguments (comma separated):</label>
+            <input type="text" id="funcArgs" value="16">
+        </div>
+        <div>
+            <label for="stepSize">Step size:</label>
+            <input type="number" id="stepSize" value="10">
+        </div>
+        <div>
+            <label for="memStepSize">Memory step size:</label>
+            <input type="number" id="memStepSize" value="1024">
+        </div>
+        <button id="runButton">Run</button>
+    </div>
+
+    <div class="section">
+        <h2>Verify Proof from JSON Files</h2>
+        <div class="file-input">
+            <label for="snarkFile">Upload SNARK file (snark.json):</label>
+            <input type="file" id="snarkFile">
+        </div>
+        <div class="file-input">
+            <label for="instanceFile">Upload Instance file (instance.json):</label>
+            <input type="file" id="instanceFile">
+        </div>
+        <button id="verifyButton">Verify Proof</button>
+    </div>
+
+    <h2>Output:</h2>
+    <pre id="output">Results will appear here...</pre>
 
     <script>
+        if (WebAssembly.validate(new Uint8Array([0xfd, 0x00, 0x01, 0x0b]))) {
+            console.log("SIMD is supported!");
+        } else {
+            console.log("SIMD is NOT supported!");
+        }
+
         const worker = new Worker("worker.js");
 
         worker.onmessage = (event) => {
@@ -25,23 +103,66 @@
         };
 
         document.getElementById("runButton").addEventListener("click", async () => {
-            const fileInput = document.getElementById("fileInput").files[0];
+            const fileInput = document.getElementById("watFileInput").files[0];
             if (!fileInput) {
                 alert("Please select a WAT file");
                 return;
             }
 
+            document.getElementById("output").textContent = "Processing...";
+
             const reader = new FileReader();
             reader.onload = () => {
                 const wat = reader.result;
-                const func = "test_func"; // Change as needed
-                const args = ["16"];
-                const stepSize = 10;
-                const memStepSize = 1024;
+                const func = document.getElementById("funcName").value;
+                const argsString = document.getElementById("funcArgs").value;
+                const args = argsString.split(",").map(arg => arg.trim());
+                const stepSize = parseInt(document.getElementById("stepSize").value);
+                const memStepSize = parseInt(document.getElementById("memStepSize").value);
 
-                worker.postMessage({ wat, func, args, stepSize, memStepSize });
+                worker.postMessage({ 
+                    type: "run", 
+                    wat, 
+                    func, 
+                    args, 
+                    stepSize, 
+                    memStepSize 
+                });
             };
             reader.readAsText(fileInput);
+        });
+
+        document.getElementById("verifyButton").addEventListener("click", async () => {
+            const snarkFile = document.getElementById("snarkFile").files[0];
+            const instanceFile = document.getElementById("instanceFile").files[0];
+            
+            if (!snarkFile || !instanceFile) {
+                alert("Please select both SNARK and Instance files");
+                return;
+            }
+
+            document.getElementById("output").textContent = "Verifying proof...";
+
+            // Read snark.json
+            const snarkReader = new FileReader();
+            snarkReader.onload = (snarkEvent) => {
+                const snarkContent = snarkEvent.target.result;
+                
+                // Read instance.json
+                const instanceReader = new FileReader();
+                instanceReader.onload = (instanceEvent) => {
+                    const instanceContent = instanceEvent.target.result;
+                    
+                    // Send both files to the worker
+                    worker.postMessage({
+                        type: "verify",
+                        snarkContent,
+                        instanceContent
+                    });
+                };
+                instanceReader.readAsText(instanceFile);
+            };
+            snarkReader.readAsText(snarkFile);
         });
     </script>
 </body>

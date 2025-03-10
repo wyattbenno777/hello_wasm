@@ -6,7 +6,7 @@ use zk_engine::{
     },
     utils::logging::init_logger,
     wasm_ctx::{WASMArgsBuilder, WASMCtx},
-    wasm_snark::{StepSize, WasmSNARK},
+    wasm_snark::{StepSize, WasmSNARK, ZKWASMInstance},
 };
 
 use wasm_bindgen::prelude::*;
@@ -18,7 +18,10 @@ pub type E = Bn256EngineIPA;
 pub type EE1 = ipa_pc::EvaluationEngine<E>;
 pub type EE2 = ipa_pc::EvaluationEngine<Dual<E>>;
 pub type S1 = spartan::batched::BatchedRelaxedR1CSSNARK<E, EE1>;
-pub type S2 = spartan::batched::BatchedRelaxedR1CSSNARK<Dual<E>, EE2>;
+pub type S2 = spartan::snark::RelaxedR1CSSNARK<Dual<E>, EE2>;
+
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 const FIB_WAT: &str = "(module
     (func $fib (export \"fib\") (param $N i64) (result i64)
@@ -89,6 +92,34 @@ pub fn run_fib(func: &str, func_args: JsValue, step_size: u32, mem_step_size: u3
         .map_err(|e| JsValue::from_str(&format!("Verification error: {}", e)))?;
     
     callback.call1(&this, &JsValue::from_str("Proof verified successfully"))?;
+    
+    Ok(JsValue::from_str("Proof verified successfully"))
+}
+
+#[wasm_bindgen]
+pub fn verify_proof(str_snark: String, str_instance: String, callback: js_sys::Function) -> Result<JsValue, JsValue> {
+    init_logger();
+    let this = JsValue::null();
+    
+    // Parse the JSON strings
+    callback.call1(&this, &JsValue::from_str("Loading files"))?;
+    let snark: WasmSNARK<E, S1, S2> = serde_json::from_str(&str_snark)
+        .map_err(|e| JsValue::from_str(&format!("Error parsing snark.json: {}", e)))?;
+    
+    let instance: ZKWASMInstance<E> = serde_json::from_str(&str_instance)
+        .map_err(|e| JsValue::from_str(&format!("Error parsing instance.json: {}", e)))?;
+    
+    // Create a dummy setup to get public parameters
+    // (assuming this is needed for verification)
+    let step_size = StepSize::new(10);
+    callback.call1(&this, &JsValue::from_str("Starting PP"))?;
+    let pp = WasmSNARK::<E, S1, S2>::setup(step_size);
+
+    callback.call1(&this, &JsValue::from_str("Verify start!"))?;
+    
+    // Verify the proof
+    snark.verify(&pp, &instance)
+        .map_err(|e| JsValue::from_str(&format!("Verification error: {}", e)))?;
     
     Ok(JsValue::from_str("Proof verified successfully"))
 }
