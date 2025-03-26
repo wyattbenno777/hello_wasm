@@ -9,14 +9,17 @@ use nova_snark::{
     traits::{circuit::StepCircuit, Engine},
 };
 
+/// Size of the address in bytes
 const ADDRESS_SIZE: usize = 10;
+/// Number of public addresses in the circuit
 const NUM_ADDRESSES: usize = 5;
+/// Number of bits in the challenge
 const NUM_CHALLENGE_BITS: usize = 250;
-
 /// Public list of addresses
 ///
 /// # Note
-/// * The * operator dereferences the byte slice literal into an array.
+///
+/// * The `*` operator dereferences the byte slice literal into an array.
 /// * We pad addresses with zeros since we need a fixed length of the addresses in the circuit
 const ADDRESSES: [[u8; ADDRESS_SIZE]; NUM_ADDRESSES] = [
     *b"192.168.01",
@@ -26,6 +29,7 @@ const ADDRESSES: [[u8; ADDRESS_SIZE]; NUM_ADDRESSES] = [
     *b"172.16.0.1",
 ];
 
+/// A circuit that enforces an address is not in a list of public addresses
 #[derive(Clone, Debug)]
 pub struct ExclusionCircuit<E> {
     address: [u8; ADDRESS_SIZE],
@@ -46,13 +50,13 @@ where
         z: &[AllocatedNum<E::Scalar>],
     ) -> Result<Vec<AllocatedNum<E::Scalar>>, SynthesisError> {
         let (address, pub_addresses) = self.alloc_witness(cs.namespace(|| "alloc witness"))?;
+
+        // Get challenge & use it to hash addresses
         let mut ro = E::RO2Circuit::new(RO2ConstantsCircuit::<E>::default());
-        for c in address.value.iter() {
-            ro.absorb(c);
-        }
+        address.absorb_in_ro::<E>(&mut ro);
         let r_bits = ro.squeeze(cs.namespace(|| "squeeze"), NUM_CHALLENGE_BITS)?;
-        let hash = le_bits_to_num(cs.namespace(|| "bits to hash"), &r_bits)?;
-        let basis = pow_vec::<_, _, ADDRESS_SIZE>(cs.namespace(|| "pow_vec"), &hash)?;
+        let r = le_bits_to_num(cs.namespace(|| "bits to hash"), &r_bits)?;
+        let basis = pow_vec::<_, _, ADDRESS_SIZE>(cs.namespace(|| "pow_vec"), &r)?;
         let address_hash = address.hash(cs.namespace(|| "address_hash"), &basis)?;
         let mut public_hashes = Vec::with_capacity(NUM_ADDRESSES);
         for (i, pub_address) in pub_addresses.iter().enumerate() {
@@ -93,6 +97,7 @@ where
     }
 }
 
+/// Computes the powers of a field element and returns them in a vector
 fn pow_vec<CS, F, const SIZE: usize>(
     mut cs: CS,
     r: &AllocatedNum<F>,
@@ -118,6 +123,7 @@ impl<E> ExclusionCircuit<E>
 where
     E: Engine,
 {
+    /// Creates an instance of [`ExclusionCircuit`]
     pub fn new(address: [u8; ADDRESS_SIZE]) -> Self {
         Self {
             address,
@@ -125,6 +131,7 @@ where
         }
     }
 
+    /// Allocates the address and public addresses in the circuit
     pub fn alloc_witness<CS, F>(
         &self,
         mut cs: CS,
@@ -145,6 +152,7 @@ where
     }
 }
 
+/// A type that represents an address in the constraint system
 pub struct AllocatedAddress<F>
 where
     F: PrimeField,
@@ -174,6 +182,7 @@ where
         })
     }
 
+    /// Hashes the address using the basis
     fn hash<CS>(
         &self,
         mut cs: CS,
@@ -189,6 +198,16 @@ where
             result = result.add(cs.namespace(|| format!("add_{i}")), &term)?;
         }
         Ok(result)
+    }
+
+    /// Absorbs the address in the provided RO
+    fn absorb_in_ro<E>(&self, ro: &mut E::RO2Circuit)
+    where
+        E: Engine<Scalar = F>,
+    {
+        for c in self.value.iter() {
+            ro.absorb(c);
+        }
     }
 }
 
@@ -243,10 +262,11 @@ mod test {
     type EE = ipa_pc::EvaluationEngine<E>;
     type S = RelaxedR1CSSNARK<E, EE>;
 
+    const TEST_ADDRESS: [u8; 10] = *b"192.168.02";
+
     #[test]
     fn test_circuit() {
-        let address = *b"192.168.02";
-        let circuit = ExclusionCircuit::<E>::new(address);
+        let circuit = ExclusionCircuit::<E>::new(TEST_ADDRESS);
         let mut cs = TestConstraintSystem::<F>::new();
         circuit
             .synthesize(&mut cs, &[])
@@ -256,8 +276,7 @@ mod test {
 
     #[test]
     fn test_delegated_spartan() {
-        let address = *b"192.168.02";
-        let circuit = ExclusionCircuit::<E>::new(address);
+        let circuit = ExclusionCircuit::<E>::new(TEST_ADDRESS);
         let time = Instant::now();
         let (pk, vk) =
             DirectSNARK::<E, S, _>::setup(circuit.clone()).expect("pk, vk should be constructed");
