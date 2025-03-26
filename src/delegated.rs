@@ -58,14 +58,15 @@ where
         let r = le_bits_to_num(cs.namespace(|| "bits to hash"), &r_bits)?;
         let basis = pow_vec::<_, _, ADDRESS_SIZE>(cs.namespace(|| "pow_vec"), &r)?;
         let address_hash = address.hash(cs.namespace(|| "address_hash"), &basis)?;
-        let mut public_hashes = Vec::with_capacity(NUM_ADDRESSES);
-        for (i, pub_address) in pub_addresses.iter().enumerate() {
-            let pub_address_hash =
-                pub_address.hash(cs.namespace(|| format!("pub_address_hash_{i}")), &basis)?;
-            public_hashes.push(pub_address_hash);
-        }
+        let public_hashes = pub_addresses
+            .iter()
+            .enumerate()
+            .map(|(i, pub_address)| {
+                pub_address.hash(cs.namespace(|| format!("pub_address_hash_{i}")), &basis)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-        // enforce address_hash != public_hashes[i] for all i
+        // --- enforce address_hash != public_hashes[i] for all i ---
         for (i, pub_address_hash) in public_hashes.iter().enumerate() {
             // We know that `a != b` iff `a-b` has an inverse, i.e. that there exists
             // `c` such that `c * (a-b) = 1`.
