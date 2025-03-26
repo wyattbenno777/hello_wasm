@@ -41,7 +41,7 @@ where
     E: Engine,
 {
     fn arity(&self) -> usize {
-        0
+        1
     }
 
     fn synthesize<CS: ConstraintSystem<E::Scalar>>(
@@ -250,18 +250,25 @@ mod test {
     use std::time::Instant;
 
     use super::{ExclusionCircuit, ADDRESSES, IPV4_ADDRESS_LEN};
+    use nova_snark::frontend::num::AllocatedNum;
+    use nova_snark::frontend::ConstraintSystem;
+    use nova_snark::spartan::spark::TrivialCompComputationEngine;
     use nova_snark::traits::circuit::StepCircuit;
     use nova_snark::traits::Engine;
     use nova_snark::{
         frontend::test_cs::TestConstraintSystem,
         provider::{ipa_pc, Bn256EngineIPA},
-        spartan::{direct::DirectSNARK, snark::RelaxedR1CSSNARK},
+        spartan::direct::DirectSNARK,
     };
 
     type E = Bn256EngineIPA;
     type F = <E as Engine>::Scalar;
     type EE = ipa_pc::EvaluationEngine<E>;
-    type S = RelaxedR1CSSNARK<E, EE>;
+    type S = nova_snark::spartan::delegatedsnark::RelaxedR1CSSNARK<
+        E,
+        EE,
+        TrivialCompComputationEngine<E, EE>,
+    >;
 
     const TEST_ADDRESS: [u8; IPV4_ADDRESS_LEN] = *b"192.168.020.000";
 
@@ -269,8 +276,9 @@ mod test {
     fn test_circuit() {
         let circuit = ExclusionCircuit::<E>::new(TEST_ADDRESS);
         let mut cs = TestConstraintSystem::<F>::new();
+        let zero = AllocatedNum::alloc_infallible(cs.namespace(|| "z0"), F::zero);
         circuit
-            .synthesize(&mut cs, &[])
+            .synthesize(&mut cs, &[zero])
             .expect("circuit should synthesize");
         assert!(cs.is_satisfied());
     }
@@ -282,11 +290,13 @@ mod test {
             DirectSNARK::<E, S, _>::setup(circuit.clone()).expect("pk, vk should be constructed");
         println!("Setup time: {:?}", time.elapsed());
         let time = Instant::now();
-        let proof =
-            DirectSNARK::<E, S, _>::prove(&pk, circuit, &[]).expect("proof should be valid");
+        let proof = DirectSNARK::<E, S, _>::prove(&pk, circuit, &[F::zero()])
+            .expect("proof should be valid");
         println!("Proving time: {:?}", time.elapsed());
         let time = Instant::now();
-        proof.verify(&vk, &[]).expect("proof should be verified");
+        proof
+            .verify(&vk, &[F::zero(), F::zero()])
+            .expect("proof should be verified");
         println!("Verification time: {:?}", time.elapsed());
     }
 

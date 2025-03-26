@@ -16,7 +16,7 @@ wat = "1.0"
 zk-engine = { git = "https://github.com/ICME-Lab/zkEngine_dev", branch = "arecibo-wyatt" }
 js-sys = "0.3"
 wee_alloc = "0.4"
-nova-snark = { git = "https://github.com/ICME-Lab/Nova/", branch = "dev", package = "nova-snark" }
+nova-snark = { git = "https://github.com/ICME-Lab/Nova/", branch = "feat/delegated-spartan", package = "nova-snark" }
 ff = "0.13.1"
 
 [dev-dependencies]

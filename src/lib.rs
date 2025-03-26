@@ -146,15 +146,20 @@ extern "C" {
 
 #[wasm_bindgen]
 pub fn delegated_spartan(address: String) {
+    use nova_snark::spartan::spark::TrivialCompComputationEngine;
     use nova_snark::traits::Engine;
     use nova_snark::{
         provider::{ipa_pc, Bn256EngineIPA},
-        spartan::{direct::DirectSNARK, snark::RelaxedR1CSSNARK},
+        spartan::direct::DirectSNARK,
     };
     type E = Bn256EngineIPA;
     type F = <E as Engine>::Scalar;
     type EE = ipa_pc::EvaluationEngine<E>;
-    type S = RelaxedR1CSSNARK<E, EE>;
+    type S = nova_snark::spartan::delegatedsnark::RelaxedR1CSSNARK<
+        E,
+        EE,
+        TrivialCompComputationEngine<E, EE>,
+    >;
     let address = address.as_bytes();
     let circuit = ExclusionCircuit::<E>::new(address.try_into().unwrap());
     log("Setup...");
@@ -162,9 +167,12 @@ pub fn delegated_spartan(address: String) {
         DirectSNARK::<E, S, _>::setup(circuit.clone()).expect("pk, vk should be constructed");
     log("Setup done!");
     log("Proving...");
-    let proof = DirectSNARK::<E, S, _>::prove(&pk, circuit, &[]).expect("proof should be valid");
+    let proof =
+        DirectSNARK::<E, S, _>::prove(&pk, circuit, &[F::zero()]).expect("proof should be valid");
     log("Proof generated!");
     log("Verifying...");
-    proof.verify(&vk, &[]).expect("proof should be verified");
+    proof
+        .verify(&vk, &[F::zero(), F::zero()])
+        .expect("proof should be verified");
     log("Proof verified!");
 }
