@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,15 +12,18 @@
             margin: 0 auto;
             padding: 20px;
         }
+
         .section {
             margin-bottom: 30px;
             padding: 20px;
             border: 1px solid #ddd;
             border-radius: 5px;
         }
+
         .file-input {
             margin-bottom: 10px;
         }
+
         button {
             padding: 8px 16px;
             background-color: #4CAF50;
@@ -28,9 +32,11 @@
             border-radius: 4px;
             cursor: pointer;
         }
+
         button:hover {
             background-color: #45a049;
         }
+
         pre {
             background-color: #f5f5f5;
             padding: 10px;
@@ -39,9 +45,10 @@
         }
     </style>
 </head>
+
 <body>
     <h1>zkVM WASM Runner</h1>
-    
+
     <div class="section">
         <h2>Run zkVM with WAT File</h2>
         <div class="file-input">
@@ -78,6 +85,10 @@
             <input type="file" id="instanceFile">
         </div>
         <button id="verifyButton">Verify Proof</button>
+    </div>
+
+    <div>
+        <button onclick="delegated_spartan()">Run Delegated Spartan example</button>
     </div>
 
     <h2>Output:</h2>
@@ -120,13 +131,13 @@
                 const stepSize = parseInt(document.getElementById("stepSize").value);
                 const memStepSize = parseInt(document.getElementById("memStepSize").value);
 
-                worker.postMessage({ 
-                    type: "run", 
-                    wat, 
-                    func, 
-                    args, 
-                    stepSize, 
-                    memStepSize 
+                worker.postMessage({
+                    type: "run",
+                    wat,
+                    func,
+                    args,
+                    stepSize,
+                    memStepSize
                 });
             };
             reader.readAsText(fileInput);
@@ -135,7 +146,7 @@
         document.getElementById("verifyButton").addEventListener("click", async () => {
             const snarkFile = document.getElementById("snarkFile").files[0];
             const instanceFile = document.getElementById("instanceFile").files[0];
-            
+
             if (!snarkFile || !instanceFile) {
                 alert("Please select both SNARK and Instance files");
                 return;
@@ -147,12 +158,12 @@
             const snarkReader = new FileReader();
             snarkReader.onload = (snarkEvent) => {
                 const snarkContent = snarkEvent.target.result;
-                
+
                 // Read instance.json
                 const instanceReader = new FileReader();
                 instanceReader.onload = (instanceEvent) => {
                     const instanceContent = instanceEvent.target.result;
-                    
+
                     // Send both files to the worker
                     worker.postMessage({
                         type: "verify",
@@ -165,5 +176,12 @@
             snarkReader.readAsText(snarkFile);
         });
     </script>
+    <script type="module">
+        import init, { delegated_spartan } from "../../pkg/zkvm_wasm_runner.js"
+        init().then(() => {
+            window.delegated_spartan = delegated_spartan;
+        });
+    </script>
 </body>
+
 </html>
