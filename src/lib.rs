@@ -10,7 +10,6 @@ use zk_engine::{
     wasm_snark::{StepSize, WasmSNARK, ZKWASMInstance},
 };
 
-use js_sys::Function;
 use wasm_bindgen::prelude::*;
 use wat::parse_str;
 mod delegated;
@@ -146,7 +145,7 @@ extern "C" {
 }
 
 #[wasm_bindgen]
-pub fn delegated_spartan() {
+pub fn delegated_spartan(address: String) {
     use nova_snark::traits::Engine;
     use nova_snark::{
         provider::{ipa_pc, Bn256EngineIPA},
@@ -156,8 +155,8 @@ pub fn delegated_spartan() {
     type F = <E as Engine>::Scalar;
     type EE = ipa_pc::EvaluationEngine<E>;
     type S = RelaxedR1CSSNARK<E, EE>;
-    let address = *b"192.168.02";
-    let circuit = ExclusionCircuit::<E>::new(address);
+    let address = address.as_bytes();
+    let circuit = ExclusionCircuit::<E>::new(address.try_into().unwrap());
     log("Setup...");
     let (pk, vk) =
         DirectSNARK::<E, S, _>::setup(circuit.clone()).expect("pk, vk should be constructed");

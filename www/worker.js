@@ -34,6 +34,12 @@ initWasm().then(() => {
                 console.log("Proof verification completed.");
                 self.postMessage({ type: "result", result });
             }
+            else if (data.type === "delegated_spartan") {
+                const { address } = data;
+                console.log(address);
+                const result = await wasm_bindgen.delegated_spartan(address);
+                self.postMessage({ type: "result", result });
+            }
         } catch (err) {
             console.error("Execution error:", err);
             self.postMessage({ type: "error", error: err.toString() });

@@ -10,7 +10,7 @@ use nova_snark::{
 };
 
 /// Size of the address in bytes
-const ADDRESS_SIZE: usize = 10;
+const IPV4_ADDRESS_LEN: usize = 15;
 /// Number of public addresses in the circuit
 const NUM_ADDRESSES: usize = 5;
 /// Number of bits in the challenge
@@ -21,18 +21,18 @@ const NUM_CHALLENGE_BITS: usize = 250;
 ///
 /// * The `*` operator dereferences the byte slice literal into an array.
 /// * We pad addresses with zeros since we need a fixed length of the addresses in the circuit
-const ADDRESSES: [[u8; ADDRESS_SIZE]; NUM_ADDRESSES] = [
-    *b"192.168.01",
-    *b"10.0.0.1\0\0",
-    *b"127.0.0.1\0",
-    *b"8.8.8.8\0\0\0",
-    *b"172.16.0.1",
+const ADDRESSES: [[u8; IPV4_ADDRESS_LEN]; NUM_ADDRESSES] = [
+    *b"203.000.113.100",
+    *b"192.0.2.55\0\0\0\0\0",
+    *b"198.51.100.7\0\0\0",
+    *b"10.1.1.1\0\0\0\0\0\0\0",
+    *b"8.26.56.26\0\0\0\0\0",
 ];
 
 /// A circuit that enforces an address is not in a list of public addresses
 #[derive(Clone, Debug)]
 pub struct ExclusionCircuit<E> {
-    address: [u8; ADDRESS_SIZE],
+    address: [u8; IPV4_ADDRESS_LEN],
     _engine: PhantomData<E>,
 }
 
@@ -56,7 +56,7 @@ where
         address.absorb_in_ro::<E>(&mut ro);
         let r_bits = ro.squeeze(cs.namespace(|| "squeeze"), NUM_CHALLENGE_BITS)?;
         let r = le_bits_to_num(cs.namespace(|| "bits to hash"), &r_bits)?;
-        let basis = pow_vec::<_, _, ADDRESS_SIZE>(cs.namespace(|| "pow_vec"), &r)?;
+        let basis = pow_vec::<_, _, IPV4_ADDRESS_LEN>(cs.namespace(|| "pow_vec"), &r)?;
         let address_hash = address.hash(cs.namespace(|| "address_hash"), &basis)?;
         let public_hashes = pub_addresses
             .iter()
@@ -125,7 +125,7 @@ where
     E: Engine,
 {
     /// Creates an instance of [`ExclusionCircuit`]
-    pub fn new(address: [u8; ADDRESS_SIZE]) -> Self {
+    pub fn new(address: [u8; IPV4_ADDRESS_LEN]) -> Self {
         Self {
             address,
             _engine: PhantomData,
@@ -158,18 +158,18 @@ pub struct AllocatedAddress<F>
 where
     F: PrimeField,
 {
-    value: [AllocatedNum<F>; ADDRESS_SIZE],
+    value: [AllocatedNum<F>; IPV4_ADDRESS_LEN],
 }
 
 impl<F> AllocatedAddress<F>
 where
     F: PrimeField,
 {
-    fn alloc<CS>(mut cs: CS, address: &[u8; ADDRESS_SIZE]) -> Result<Self, SynthesisError>
+    fn alloc<CS>(mut cs: CS, address: &[u8; IPV4_ADDRESS_LEN]) -> Result<Self, SynthesisError>
     where
         CS: ConstraintSystem<F>,
     {
-        let mut value = Vec::with_capacity(ADDRESS_SIZE);
+        let mut value = Vec::with_capacity(IPV4_ADDRESS_LEN);
         for (i, c) in address.iter().enumerate() {
             let char = AllocatedNum::alloc(cs.namespace(|| format!("char_{i}")), || {
                 Ok(F::from(*c as u64))
@@ -249,7 +249,7 @@ where
 mod test {
     use std::time::Instant;
 
-    use super::ExclusionCircuit;
+    use super::{ExclusionCircuit, ADDRESSES, IPV4_ADDRESS_LEN};
     use nova_snark::traits::circuit::StepCircuit;
     use nova_snark::traits::Engine;
     use nova_snark::{
@@ -263,7 +263,7 @@ mod test {
     type EE = ipa_pc::EvaluationEngine<E>;
     type S = RelaxedR1CSSNARK<E, EE>;
 
-    const TEST_ADDRESS: [u8; 10] = *b"192.168.02";
+    const TEST_ADDRESS: [u8; IPV4_ADDRESS_LEN] = *b"192.168.020.000";
 
     #[test]
     fn test_circuit() {
@@ -275,9 +275,8 @@ mod test {
         assert!(cs.is_satisfied());
     }
 
-    #[test]
-    fn test_delegated_spartan() {
-        let circuit = ExclusionCircuit::<E>::new(TEST_ADDRESS);
+    fn test_delegated_spartan_with(addr: [u8; IPV4_ADDRESS_LEN]) {
+        let circuit = ExclusionCircuit::<E>::new(addr);
         let time = Instant::now();
         let (pk, vk) =
             DirectSNARK::<E, S, _>::setup(circuit.clone()).expect("pk, vk should be constructed");
@@ -289,5 +288,16 @@ mod test {
         let time = Instant::now();
         proof.verify(&vk, &[]).expect("proof should be verified");
         println!("Verification time: {:?}", time.elapsed());
+    }
+
+    #[test]
+    fn test_delegated_spartan() {
+        test_delegated_spartan_with(TEST_ADDRESS);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_delegated_spartan() {
+        test_delegated_spartan_with(ADDRESSES[0]);
     }
 }

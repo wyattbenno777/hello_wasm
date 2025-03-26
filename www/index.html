@@ -88,7 +88,11 @@
     </div>
 
     <div>
-        <button onclick="delegated_spartan()">Run Delegated Spartan example</button>
+        <button id="delegatedSpartanButton">Run Delegated Spartan example</button>
+        <div>
+            <label for="ip-address">IPV4 address</label>
+            <input id="ip-address" value="192.168.020.000">
+        </div>
     </div>
 
     <h2>Output:</h2>
@@ -175,11 +179,17 @@
             };
             snarkReader.readAsText(snarkFile);
         });
-    </script>
-    <script type="module">
-        import init, { delegated_spartan } from "../../pkg/zkvm_wasm_runner.js"
-        init().then(() => {
-            window.delegated_spartan = delegated_spartan;
+
+        document.getElementById("delegatedSpartanButton").addEventListener("click", async () => {
+            const address = document.getElementById("ip-address").value;
+            if (address.length > 15) {
+                throw new Error("IP address too long. Must be 15 characters or fewer.");
+            }
+            const paddedAddress = address.padEnd(15, '\0');
+            worker.postMessage({
+                type: "delegated_spartan",
+                address: paddedAddress,
+            });
         });
     </script>
 </body>
