@@ -1,3 +1,4 @@
+use delegated::ExclusionCircuit;
 use zk_engine::{
     nova::{
         provider::{ipa_pc, Bn256EngineIPA},
@@ -10,8 +11,8 @@ use zk_engine::{
 };
 
 use wasm_bindgen::prelude::*;
-use js_sys::Function;
 use wat::parse_str;
+mod delegated;
 
 // Ensure you use the correct cycle pairing
 pub type E = Bn256EngineIPA;
@@ -55,12 +56,18 @@ const FIB_WAT: &str = "(module
 )";
 
 #[wasm_bindgen]
-pub fn run_fib(func: &str, func_args: JsValue, step_size: u32, mem_step_size: u32, callback: js_sys::Function) -> Result<JsValue, JsValue> {
+pub fn run_fib(
+    func: &str,
+    func_args: JsValue,
+    step_size: u32,
+    mem_step_size: u32,
+    callback: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     init_logger();
     let this = JsValue::null();
 
     callback.call1(&this, &JsValue::from_str("Start"))?;
-    
+
     //let step_size = StepSize::new(step_size as usize);
     let step_size = StepSize::new(10);
     callback.call1(&this, &JsValue::from_str("Start pp"))?;
@@ -71,8 +78,9 @@ pub fn run_fib(func: &str, func_args: JsValue, step_size: u32, mem_step_size: u3
         .map_err(|e| JsValue::from_str(&format!("Invalid function arguments: {}", e)))?;
     callback.call1(&this, &JsValue::from_str("loaded Args"))?;
 
-    let wasm_bytes = parse_str(FIB_WAT).map_err(|e| JsValue::from_str(&format!("Error parsing WAT: {}", e)))?;
-    
+    let wasm_bytes =
+        parse_str(FIB_WAT).map_err(|e| JsValue::from_str(&format!("Error parsing WAT: {}", e)))?;
+
     let wasm_args = WASMArgsBuilder::default()
         .bytecode(wasm_bytes)
         .invoke("fib")
@@ -80,35 +88,40 @@ pub fn run_fib(func: &str, func_args: JsValue, step_size: u32, mem_step_size: u3
         .build();
 
     callback.call1(&this, &JsValue::from_str("Start new"))?;
-    
+
     let wasm_ctx = WASMCtx::new(wasm_args);
     callback.call1(&this, &JsValue::from_str("Start prove"))?;
-    
+
     let (snark, instance) = WasmSNARK::<E, S1, S2>::prove(&pp, &wasm_ctx, step_size)
         .map_err(|e| JsValue::from_str(&format!("Proving error: {}", e)))?;
     callback.call1(&this, &JsValue::from_str("Proving complete"))?;
-    
-    snark.verify(&pp, &instance)
+
+    snark
+        .verify(&pp, &instance)
         .map_err(|e| JsValue::from_str(&format!("Verification error: {}", e)))?;
-    
+
     callback.call1(&this, &JsValue::from_str("Proof verified successfully"))?;
-    
+
     Ok(JsValue::from_str("Proof verified successfully"))
 }
 
 #[wasm_bindgen]
-pub fn verify_proof(str_snark: String, str_instance: String, callback: js_sys::Function) -> Result<JsValue, JsValue> {
+pub fn verify_proof(
+    str_snark: String,
+    str_instance: String,
+    callback: js_sys::Function,
+) -> Result<JsValue, JsValue> {
     init_logger();
     let this = JsValue::null();
-    
+
     // Parse the JSON strings
     callback.call1(&this, &JsValue::from_str("Loading files"))?;
     let snark: WasmSNARK<E, S1, S2> = serde_json::from_str(&str_snark)
         .map_err(|e| JsValue::from_str(&format!("Error parsing snark.json: {}", e)))?;
-    
+
     let instance: ZKWASMInstance<E> = serde_json::from_str(&str_instance)
         .map_err(|e| JsValue::from_str(&format!("Error parsing instance.json: {}", e)))?;
-    
+
     // Create a dummy setup to get public parameters
     // (assuming this is needed for verification)
     let step_size = StepSize::new(10);
@@ -116,10 +129,50 @@ pub fn verify_proof(str_snark: String, str_instance: String, callback: js_sys::F
     let pp = WasmSNARK::<E, S1, S2>::setup(step_size);
 
     callback.call1(&this, &JsValue::from_str("Verify start!"))?;
-    
+
     // Verify the proof
-    snark.verify(&pp, &instance)
+    snark
+        .verify(&pp, &instance)
         .map_err(|e| JsValue::from_str(&format!("Verification error: {}", e)))?;
-    
+
     Ok(JsValue::from_str("Proof verified successfully"))
+}
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+#[wasm_bindgen]
+pub fn delegated_spartan(address: String) {
+    use nova_snark::spartan::spark::TrivialCompComputationEngine;
+    use nova_snark::traits::Engine;
+    use nova_snark::{
+        provider::{ipa_pc, Bn256EngineIPA},
+        spartan::direct::DirectSNARK,
+    };
+    type E = Bn256EngineIPA;
+    type F = <E as Engine>::Scalar;
+    type EE = ipa_pc::EvaluationEngine<E>;
+    type S = nova_snark::spartan::delegatedsnark::RelaxedR1CSSNARK<
+        E,
+        EE,
+        TrivialCompComputationEngine<E, EE>,
+    >;
+    let address = address.as_bytes();
+    let circuit = ExclusionCircuit::<E>::new(address.try_into().unwrap());
+    log("Setup...");
+    let (pk, vk) =
+        DirectSNARK::<E, S, _>::setup(circuit.clone()).expect("pk, vk should be constructed");
+    log("Setup done!");
+    log("Proving...");
+    let proof =
+        DirectSNARK::<E, S, _>::prove(&pk, circuit, &[F::zero()]).expect("proof should be valid");
+    log("Proof generated!");
+    log("Verifying...");
+    proof
+        .verify(&vk, &[F::zero(), F::zero()])
+        .expect("proof should be verified");
+    log("Proof verified!");
 }
