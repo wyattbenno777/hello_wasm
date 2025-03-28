@@ -36,7 +36,7 @@ initWasm().then(() => {
             }
             else if (data.type === "delegated_spartan") {
                 const { address } = data;
-                const result = await wasm_bindgen.delegated_spartan(address);
+                const result = await wasm_bindgen.delegated_spartan(address, logOutput);
                 self.postMessage({ type: "result", result });
             }
         } catch (err) {
