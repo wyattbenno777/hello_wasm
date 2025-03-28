@@ -145,7 +145,7 @@ extern "C" {
 }
 
 #[wasm_bindgen]
-pub fn delegated_spartan(address: String) {
+pub fn delegated_spartan(address: String, callback: js_sys::Function) -> Result<JsValue, JsValue> {
     use nova_snark::spartan::spark::TrivialCompComputationEngine;
     use nova_snark::traits::Engine;
     use nova_snark::{
@@ -160,19 +160,21 @@ pub fn delegated_spartan(address: String) {
         EE,
         TrivialCompComputationEngine<E, EE>,
     >;
+    let this = JsValue::null();
     let address = address.as_bytes();
     let circuit = ExclusionCircuit::<E>::new(address.try_into().unwrap());
-    log("Setup...");
+    callback.call1(&this, &JsValue::from_str("Setup..."))?;
+
     let (pk, vk) =
         DirectSNARK::<E, S, _>::setup(circuit.clone()).expect("pk, vk should be constructed");
-    log("Setup done!");
-    log("Proving...");
+    callback.call1(&this, &JsValue::from_str("Setup done!"))?;
+    callback.call1(&this, &JsValue::from_str("Proving..."))?;
     let proof =
         DirectSNARK::<E, S, _>::prove(&pk, circuit, &[F::zero()]).expect("proof should be valid");
-    log("Proof generated!");
-    log("Verifying...");
+    callback.call1(&this, &JsValue::from_str("Proof generated!"))?;
+    callback.call1(&this, &JsValue::from_str("Verifying..."))?;
     proof
         .verify(&vk, &[F::zero(), F::zero()])
         .expect("proof should be verified");
-    log("Proof verified!");
+    Ok(JsValue::from_str("Proof verified successfully"))
 }
