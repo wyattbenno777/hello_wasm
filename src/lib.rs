@@ -140,7 +140,7 @@ pub fn verify_proof(
 
     // Create a dummy setup to get public parameters
     // (assuming this is needed for verification)
-    let step_size = StepSize::new(10);
+    let step_size = StepSize::new(20);
     callback.call1(&this, &JsValue::from_str("Starting PP"))?;
     let pp = WasmSNARK::<E, S1, S2>::setup(step_size);
 
