@@ -1,7 +1,8 @@
 use delegated::ExclusionCircuit;
+use halo2curves::bn256::Bn256;
 use zk_engine::{
     nova::{
-        provider::{ipa_pc, Bn256EngineIPA},
+        provider::{Bn256EngineIPA, Bn256EngineKZG, GrumpkinEngine},
         spartan,
         traits::Dual,
     },
@@ -15,11 +16,13 @@ use wat::parse_str;
 mod delegated;
 
 // Ensure you use the correct cycle pairing
-pub type E = Bn256EngineIPA;
-pub type EE1 = ipa_pc::EvaluationEngine<E>;
-pub type EE2 = ipa_pc::EvaluationEngine<Dual<E>>;
-pub type S1 = spartan::batched::BatchedRelaxedR1CSSNARK<E, EE1>;
-pub type S2 = spartan::snark::RelaxedR1CSSNARK<Dual<E>, EE2>;
+type E = Bn256EngineKZG;
+type E2 = GrumpkinEngine;
+type EE1 = zk_engine::nova::provider::hyperkzg::EvaluationEngine<Bn256, E>;
+type EE2 = zk_engine::nova::provider::ipa_pc::EvaluationEngine<E2>;
+type S1 = zk_engine::nova::spartan::batched::BatchedRelaxedR1CSSNARK<E, EE1>; 
+type S2 = zk_engine::nova::spartan::snark::RelaxedR1CSSNARK<E2, EE2>; 
+
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -55,6 +58,14 @@ const FIB_WAT: &str = "(module
     )
 )";
 
+use web_sys::console;
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = performance)]
+    fn now() -> f64;
+}
+
 #[wasm_bindgen]
 pub fn run_fib(
     func: &str,
@@ -71,8 +82,10 @@ pub fn run_fib(
     //let step_size = StepSize::new(step_size as usize);
     let step_size = StepSize::new(10);
     callback.call1(&this, &JsValue::from_str("Start pp"))?;
+    let pp_start = now();
     let pp = WasmSNARK::<E, S1, S2>::setup(step_size);
-    callback.call1(&this, &JsValue::from_str("End pp"))?;
+    let pp_end = now();
+    callback.call1(&this, &JsValue::from_str(&format!("End pp: {} ms", pp_end - pp_start)))?;
 
     let args: Vec<String> = serde_wasm_bindgen::from_value(func_args)
         .map_err(|e| JsValue::from_str(&format!("Invalid function arguments: {}", e)))?;
@@ -92,15 +105,18 @@ pub fn run_fib(
     let wasm_ctx = WASMCtx::new(wasm_args);
     callback.call1(&this, &JsValue::from_str("Start prove"))?;
 
+    let prove_start = now();
     let (snark, instance) = WasmSNARK::<E, S1, S2>::prove(&pp, &wasm_ctx, step_size)
         .map_err(|e| JsValue::from_str(&format!("Proving error: {}", e)))?;
-    callback.call1(&this, &JsValue::from_str("Proving complete"))?;
+    let prove_end = now();
+    callback.call1(&this, &JsValue::from_str(&format!("Proving complete: {} ms", prove_end - prove_start)))?;
 
+    let verify_start = now();
     snark
         .verify(&pp, &instance)
         .map_err(|e| JsValue::from_str(&format!("Verification error: {}", e)))?;
-
-    callback.call1(&this, &JsValue::from_str("Proof verified successfully"))?;
+    let verify_end = now();
+    callback.call1(&this, &JsValue::from_str(&format!("Verification complete: {} ms", verify_end - verify_start)))?;
 
     Ok(JsValue::from_str("Proof verified successfully"))
 }
