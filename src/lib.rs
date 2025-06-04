@@ -82,7 +82,7 @@ pub fn run_fib(
     callback.call1(&this, &JsValue::from_str("Start"))?;
 
     //let step_size = StepSize::new(step_size as usize);
-    let step_size = StepSize::new(20);
+    let step_size = StepSize::new(100);
     callback.call1(&this, &JsValue::from_str("Start pp"))?;
     let pp_start = now();
     let pp = WasmSNARK::<E, S1, S2>::setup(step_size);
