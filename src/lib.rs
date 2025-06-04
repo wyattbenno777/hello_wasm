@@ -81,7 +81,7 @@ pub async fn run_fib(
     callback.call1(&this, &JsValue::from_str("Start"))?;
 
     //let step_size = StepSize::new(step_size as usize);
-    let step_size = StepSize::new(200);
+    let step_size = StepSize::new(150);
     callback.call1(&this, &JsValue::from_str("Start pp"))?;
     let pp_start = now();
     let pp = WasmSNARK::<E, S1, S2>::setup(step_size);
@@ -143,7 +143,7 @@ pub async fn verify_proof(
 
     // Create a dummy setup to get public parameters
     // (assuming this is needed for verification)
-    let step_size = StepSize::new(20);
+    let step_size = StepSize::new(1);
     callback.call1(&this, &JsValue::from_str("Starting PP"))?;
     let pp = WasmSNARK::<E, S1, S2>::setup(step_size);
 
