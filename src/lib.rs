@@ -12,6 +12,7 @@ use zk_engine::{
 };
 
 use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures;
 use wat::parse_str;
 mod delegated;
 
@@ -58,8 +59,6 @@ const FIB_WAT: &str = "(module
     )
 )";
 
-
-
 use web_sys::console;
 
 #[wasm_bindgen]
@@ -69,7 +68,7 @@ extern "C" {
 }
 
 #[wasm_bindgen]
-pub fn run_fib(
+pub async fn run_fib(
     func: &str,
     func_args: JsValue,
     step_size: u32,
@@ -109,6 +108,7 @@ pub fn run_fib(
 
     let prove_start = now();
     let (snark, instance) = WasmSNARK::<E, S1, S2>::prove(&pp, &wasm_ctx, step_size)
+        .await
         .map_err(|e| JsValue::from_str(&format!("Proving error: {}", e)))?;
     let prove_end = now();
     callback.call1(&this, &JsValue::from_str(&format!("Proving complete: {} ms", prove_end - prove_start)))?;
@@ -116,6 +116,7 @@ pub fn run_fib(
     let verify_start = now();
     snark
         .verify(&pp, &instance)
+        .await
         .map_err(|e| JsValue::from_str(&format!("Verification error: {}", e)))?;
     let verify_end = now();
     callback.call1(&this, &JsValue::from_str(&format!("Verification complete: {} ms", verify_end - verify_start)))?;
@@ -124,7 +125,7 @@ pub fn run_fib(
 }
 
 #[wasm_bindgen]
-pub fn verify_proof(
+pub async fn verify_proof(
     str_snark: String,
     str_instance: String,
     callback: js_sys::Function,
@@ -142,7 +143,7 @@ pub fn verify_proof(
 
     // Create a dummy setup to get public parameters
     // (assuming this is needed for verification)
-    let step_size = StepSize::new(20);
+    let step_size = StepSize::new(1);
     callback.call1(&this, &JsValue::from_str("Starting PP"))?;
     let pp = WasmSNARK::<E, S1, S2>::setup(step_size);
 
@@ -151,6 +152,7 @@ pub fn verify_proof(
     // Verify the proof
     snark
         .verify(&pp, &instance)
+        .await
         .map_err(|e| JsValue::from_str(&format!("Verification error: {}", e)))?;
 
     Ok(JsValue::from_str("Proof verified successfully"))
